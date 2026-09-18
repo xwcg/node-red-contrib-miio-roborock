@@ -13,6 +13,38 @@
 
 Node-Red Nodes for Xiaomi Roborock Vacuum connectivity.
 
+---
+
+## About this fork
+
+This fork fixes the connection getting stuck permanently, reported upstream as
+[issue #58](https://github.com/andreypopov/node-red-contrib-miio-roborock/issues/58)
+("TypeError: Cannot read properties of undefined (reading 'call')").
+
+**What went wrong.** `miio` caches one `DeviceInfo` per address and keeps the in-flight
+handshake and enrich promises on that cached object. The server node used to call
+`connect()` again on *every* failed poll - every 10 seconds, without tearing down the
+previous attempt. Once one of those cached promises was left pending (for example while
+the vacuum reboots), every later `miio.device()` call received that same dead promise:
+no UDP packet was sent any more, no error was raised, and the node kept logging
+`No connection (get status)` until the whole Node-RED process was restarted. Commands
+then failed with `TypeError: ... reading 'call'`, because `server.device` was never set.
+
+**What changed:**
+
+* `connect()` runs one attempt at a time and resolves with the device or `null` - it
+  never hangs and never rejects.
+* Every attempt first destroys the previous device and drops miio's cached `DeviceInfo`
+  for the address, so a stuck promise cannot poison later attempts.
+* A connect attempt has a hard 15 s deadline.
+* Failed polls no longer hammer `connect()`; retries back off from 10 s up to 5 min.
+* `miio-roborock-command` reports "not connected" instead of throwing a `TypeError`.
+
+`npm test` reproduces the stuck state offline (against TEST-NET-1) and verifies the
+recovery - see `test/reconnect-wedge.js`.
+
+---
+
 <b>Important:</b> works and tested with Roborock s50 (gen2), Roborock s5 Max (gen3), Roborock S8 Ultra Pro, Xiaomi S1
  
 Available nodes are:
