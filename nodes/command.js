@@ -165,7 +165,11 @@ module.exports = function(RED) {
             var device = node.server.device;
 
 
-            if (device === null) return false;
+            if (!device) {
+                node.warn("Miio Roborock: no connection to the device, command " + command + " was not sent");
+                node.status({fill: "red", shape: "ring", text: "not connected"});
+                return false;
+            }
             if (command === null) return false;
             if (payload === undefined) payload = [];
             if (payload && typeof(payload) !== 'object') payload = [payload];
